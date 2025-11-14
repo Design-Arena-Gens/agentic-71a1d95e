@@ -1,0 +1,144 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String   @id @default(cuid())
+  username       String   @unique
+  passwordHash   String
+  isAdmin        Boolean  @default(false)
+  goldBalance    Int      @default(0) // Current GOLD balance in integer units
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  goldTransactions GoldTransaction[]
+  adImpressions    AdImpression[]
+  nfts             UserNFT[]
+  farm             UserFarm?
+  purchases        Purchase[]
+}
+
+model Settings {
+  id                  Int      @id @default(1)
+  // Buy: X GOLD per 1 USD (configurable)
+  buyGoldPerUsd       Int      @default(10)
+  // Withdraw: Y GOLD per 1 USD (configurable)
+  withdrawGoldPerUsd  Int      @default(20)
+  // Rewarded ad GOLD per completed view
+  adRewardGold        Int      @default(5)
+  // Daily limit of rewarded ads per user
+  dailyAdLimit        Int      @default(10)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+enum GoldSourceType {
+  deposit
+  withdrawal
+  ad_reward
+  farm_claim
+  spend_nft
+  spend_energy
+  spend_boost
+  spend_battle
+  spend_box
+  spend_cosmetic
+  admin_adjust
+}
+
+model GoldTransaction {
+  id          String         @id @default(cuid())
+  user        User           @relation(fields: [userId], references: [id])
+  userId      String
+  type        GoldSourceType
+  // Positive GOLD amount for credits, positive for debits too; direction via type
+  goldAmount  Int
+  // Store USD cents for corresponding value at the time
+  usdCents    Int            @default(0)
+  goldBefore  Int
+  goldAfter   Int
+  createdAt   DateTime       @default(now())
+  note        String?
+}
+
+model AdImpression {
+  id          String   @id @default(cuid())
+  user        User     @relation(fields: [userId], references: [id])
+  userId      String
+  provider    String   // e.g., demo, admob, ironsource
+  nonce       String
+  tokenHash   String
+  completedAt DateTime @default(now())
+  rewarded    Boolean  @default(false)
+  dayKey      String   // YYYY-MM-DD for daily cap
+
+  @@index([userId, dayKey])
+}
+
+enum NftRarity {
+  COMMON
+  RARE
+  EPIC
+  LEGENDARY
+}
+
+model NFT {
+  id                 String    @id @default(cuid())
+  name               String
+  rarity             NftRarity
+  farmGoldPerHour    Int       // GOLD per hour when owned
+  priceGold          Int       // Purchase cost in GOLD
+  createdAt          DateTime  @default(now())
+  userNfts           UserNFT[]
+}
+
+model UserNFT {
+  id         String   @id @default(cuid())
+  user       User     @relation(fields: [userId], references: [id])
+  userId     String
+  nft        NFT      @relation(fields: [nftId], references: [id])
+  nftId      String
+  acquiredAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model UserFarm {
+  user       User     @relation(fields: [userId], references: [id])
+  userId     String   @id
+  lastClaimAt DateTime @default(now())
+}
+
+enum ShopItemType {
+  energy
+  boost
+  cosmetic
+  box
+}
+
+model ShopItem {
+  id        String       @id @default(cuid())
+  name      String
+  type      ShopItemType
+  priceGold Int
+  createdAt DateTime     @default(now())
+  purchases Purchase[]
+}
+
+model Purchase {
+  id        String    @id @default(cuid())
+  user      User      @relation(fields: [userId], references: [id])
+  userId    String
+  item      ShopItem  @relation(fields: [itemId], references: [id])
+  itemId    String
+  createdAt DateTime  @default(now())
+}
